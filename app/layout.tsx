@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { SmoothScrollProvider } from "@/components/providers/SmoothScrollProvider";
 
 const siteOrigin = process.env.NEXT_PUBLIC_SITE_ORIGIN ?? "https://arc-form-gallery.lw233093.chatgpt.site";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -19,5 +20,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en">
+      <body>
+        <SmoothScrollProvider>{children}</SmoothScrollProvider>
+      </body>
+    </html>
+  );
 }
