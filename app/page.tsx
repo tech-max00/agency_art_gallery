@@ -3,12 +3,14 @@
 import Lenis from "lenis";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const assetPrefix = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 const chapters = [
   {
     id: "top",
     number: "01",
     index: "FILM 001 / 003",
-    src: "/art/hero-cinematic ink sculpture mate (1).mp4",
+    src: `${assetPrefix}/art/hero-cinematic ink sculpture mate (1).mp4`,
     eyebrow: "CONTEMPORARY ART · ACCRA / LONDON",
     title: ["ART", "BEYOND", "THE FRAME."],
     copy: "An independent gallery for radical material, moving image and ideas that refuse containment.",
@@ -22,7 +24,7 @@ const chapters = [
     id: "exhibitions",
     number: "02",
     index: "FILM 002 / 003",
-    src: "/art/exhibition-veil.mp4",
+    src: `${assetPrefix}/art/exhibition-veil.mp4`,
     eyebrow: "CURRENT EXHIBITION · ROOM II",
     title: ["VEIL,", "UNFOLDING."],
     copy: "Sora Vale draws a moving threshold between concealment and revelation.",
@@ -36,7 +38,7 @@ const chapters = [
     id: "artists",
     number: "03",
     index: "FILM 003 / 003",
-    src: "/art/artist.mp4",
+    src: `${assetPrefix}/art/artist.mp4`,
     eyebrow: "REPRESENTED ARTIST · STUDIO VISIT",
     title: ["VOICES", "IN FORM."],
     copy: "A cross-generational programme of artists interrogating material, place and belonging.",
