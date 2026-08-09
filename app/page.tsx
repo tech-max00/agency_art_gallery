@@ -27,37 +27,58 @@ export default function Home() {
   useEffect(() => {
     if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const scenes = Array.from(document.querySelectorAll<HTMLElement>("[data-scroll-scene]"));
-    let ticking = false;
+    const state = new Map(scenes.map((scene) => [scene, { current: 0, target: 0, visible: false, lastSeek: 0 }]));
+    let raf = 0;
+    let running = false;
 
-    const render = () => {
+    const measure = () => {
       const vh = innerHeight;
       scenes.forEach((scene) => {
+        const item = state.get(scene)!;
+        if (!item.visible) return;
         const rect = scene.getBoundingClientRect();
         const pinned = scene.classList.contains("scroll-hero") || scene.classList.contains("horizontal-scene");
         const distance = Math.max(1, scene.offsetHeight - vh);
         const raw = pinned ? -rect.top / distance : (vh - rect.top) / (vh + rect.height);
-        const progress = Math.min(1, Math.max(0, raw));
-        scene.style.setProperty("--p", progress.toFixed(4));
-        scene.style.setProperty("--inv", (1 - progress).toFixed(4));
+        item.target = Math.min(1, Math.max(0, raw));
+      });
+    };
+    const animate = (now: number) => {
+      let unsettled = false;
+      scenes.forEach((scene) => {
+        const item = state.get(scene)!;
+        if (!item.visible) return;
+        const delta = item.target - item.current;
+        item.current = Math.abs(delta) < .0005 ? item.target : item.current + delta * .16;
+        if (Math.abs(delta) >= .0005) unsettled = true;
+        scene.style.setProperty("--p", item.current.toFixed(4));
         const video = scene.querySelector<HTMLVideoElement>("video[data-scrub='true']");
-        if (video?.duration && Number.isFinite(video.duration)) {
-          const target = Math.min(video.duration - 0.04, progress * video.duration);
-          if (Math.abs(video.currentTime - target) > 0.035) video.currentTime = target;
+        if (video?.duration && Number.isFinite(video.duration) && now - item.lastSeek > 80) {
+          const targetTime = Math.min(video.duration - .08, item.current * video.duration);
+          if (Math.abs(video.currentTime - targetTime) > .08) video.currentTime = targetTime;
+          item.lastSeek = now;
         }
       });
-      ticking = false;
+      if (unsettled) raf = requestAnimationFrame(animate);
+      else running = false;
     };
     const requestRender = () => {
-      if (ticking) return;
-      ticking = true;
-      requestAnimationFrame(render);
+      measure();
+      if (!running) { running = true; raf = requestAnimationFrame(animate); }
     };
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => { state.get(entry.target as HTMLElement)!.visible = entry.isIntersecting; });
+      requestRender();
+    }, { rootMargin: "35% 0px 35% 0px" });
+    scenes.forEach((scene) => observer.observe(scene));
     const videos = document.querySelectorAll<HTMLVideoElement>("video[data-scrub='true']");
-    videos.forEach((video) => { video.pause(); video.addEventListener("loadedmetadata", requestRender); });
+    videos.forEach((video) => { video.pause(); video.preload = "metadata"; video.addEventListener("loadedmetadata", requestRender); });
     addEventListener("scroll", requestRender, { passive: true });
     addEventListener("resize", requestRender, { passive: true });
     requestRender();
     return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
       removeEventListener("scroll", requestRender);
       removeEventListener("resize", requestRender);
       videos.forEach((video) => video.removeEventListener("loadedmetadata", requestRender));
@@ -73,7 +94,7 @@ export default function Home() {
     let mouseX = 0.5;
     let mouseY = 0.5;
     const resize = () => {
-      const dpr = Math.min(devicePixelRatio, 2);
+      const dpr = Math.min(devicePixelRatio, 1.25);
       canvas.width = innerWidth * dpr;
       canvas.height = innerHeight * dpr;
       canvas.style.width = `${innerWidth}px`;
@@ -93,7 +114,7 @@ export default function Home() {
       ctx.fillRect(0, 0, innerWidth, innerHeight);
       ctx.strokeStyle = "rgba(242,235,220,.028)";
       ctx.lineWidth = 1;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 3; i++) {
         ctx.beginPath();
         const r = 110 + i * 38 + Math.sin(t / 1800 + i) * 8;
         ctx.ellipse(x, y, r * 1.3, r, t / 12000 + i * .28, 0, Math.PI * 2);
@@ -101,8 +122,9 @@ export default function Home() {
       }
       raf = requestAnimationFrame(draw);
     };
-    resize(); addEventListener("resize", resize); addEventListener("pointermove", move); raf = requestAnimationFrame(draw);
-    return () => { cancelAnimationFrame(raf); removeEventListener("resize", resize); removeEventListener("pointermove", move); };
+    const visibility = () => { cancelAnimationFrame(raf); if (!document.hidden) raf = requestAnimationFrame(draw); };
+    resize(); addEventListener("resize", resize); addEventListener("pointermove", move); document.addEventListener("visibilitychange", visibility); raf = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(raf); removeEventListener("resize", resize); removeEventListener("pointermove", move); document.removeEventListener("visibilitychange", visibility); };
   }, []);
 
   return (
