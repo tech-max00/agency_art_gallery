@@ -89,6 +89,9 @@ export default function Home() {
   useEffect(() => {
     let frame = 0;
     let ticking = false;
+    let activeChapter = -1;
+    let playbackRate = 0.86;
+    const videos = videoRefs.current;
     const lenis = new Lenis({
       anchors: true,
       autoRaf: false,
@@ -99,7 +102,22 @@ export default function Home() {
       wheelMultiplier: 0.9,
     });
 
-    const updateChapter = (section: HTMLElement, video: HTMLVideoElement | null) => {
+    const setActiveChapter = (nextChapter: number) => {
+      if (activeChapter === nextChapter) return;
+      activeChapter = nextChapter;
+
+      videos.forEach((video, index) => {
+        if (!video) return;
+        if (index === activeChapter) {
+          video.playbackRate = playbackRate;
+          void video.play().catch(() => undefined);
+        } else {
+          video.pause();
+        }
+      });
+    };
+
+    const updateChapter = (section: HTMLElement) => {
       const rect = section.getBoundingClientRect();
       const travel = Math.max(1, section.offsetHeight - window.innerHeight);
       const progress = Math.min(1, Math.max(0, -rect.top / travel));
@@ -109,19 +127,21 @@ export default function Home() {
 
       const progressNode = section.querySelector<HTMLElement>("[data-progress-value]");
       if (progressNode) progressNode.textContent = `${String(Math.round(progress * 100)).padStart(2, "0")}%`;
-
-      if (video && Number.isFinite(video.duration) && video.duration > 0 && video.readyState >= 1) {
-        const target = Math.min(video.duration - 0.04, progress * video.duration);
-        if (Math.abs(video.currentTime - target) > 0.035) video.currentTime = target;
-      }
     };
 
     const update = () => {
       const pageTravel = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
       document.documentElement.style.setProperty("--page-progress", (window.scrollY / pageTravel).toFixed(4));
+      const viewportFocus = window.innerHeight * 0.5;
+      let nextActiveChapter = -1;
+
       chapterRefs.current.forEach((section, index) => {
-        if (section) updateChapter(section, videoRefs.current[index]);
+        if (!section) return;
+        updateChapter(section);
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= viewportFocus && rect.bottom >= viewportFocus) nextActiveChapter = index;
       });
+      setActiveChapter(nextActiveChapter);
       ticking = false;
     };
 
@@ -133,6 +153,10 @@ export default function Home() {
 
     const raf = (time: number) => {
       lenis.raf(time);
+      const targetRate = Math.min(1.34, 0.86 + Math.abs(lenis.velocity) * 0.018);
+      playbackRate += (targetRate - playbackRate) * 0.08;
+      const activeVideo = videos[activeChapter];
+      if (activeVideo && !activeVideo.paused) activeVideo.playbackRate = playbackRate;
       frame = window.requestAnimationFrame(raf);
     };
 
@@ -150,6 +174,7 @@ export default function Home() {
 
     return () => {
       observer.disconnect();
+      videos.forEach((video) => video?.pause());
       lenis.destroy();
       window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", schedule);
@@ -160,7 +185,7 @@ export default function Home() {
   const renderedChapters = chapters.map((chapter, index) => (
     <section className={`scroll-chapter chapter-${index + 1}`} id={chapter.id} key={chapter.id} ref={(node) => { chapterRefs.current[index] = node; }} data-zone="intro">
       <div className="chapter-sticky">
-        <video ref={(node) => { videoRefs.current[index] = node; }} className="chapter-film" src={chapter.src} preload="auto" muted playsInline aria-label={`${chapter.title.join(" ")} moving artwork`} onLoadedMetadata={() => markReady(index)} onCanPlay={() => markReady(index)} onError={() => markReady(index)} />
+        <video ref={(node) => { videoRefs.current[index] = node; }} className="chapter-film" src={chapter.src} preload="auto" muted loop playsInline disablePictureInPicture controlsList="nodownload noplaybackrate" aria-label={`${chapter.title.join(" ")} moving artwork`} onLoadedMetadata={() => markReady(index)} onCanPlay={() => markReady(index)} onCanPlayThrough={() => markReady(index)} onError={() => markReady(index)} />
         <div className="chapter-vignette" aria-hidden="true" />
         <div className="chapter-grid" aria-hidden="true" />
         <div className="chapter-chrome" aria-hidden="true"><span>ARC / FORM · LIVE ARCHIVE</span><span>{chapter.index}</span></div>
