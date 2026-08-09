@@ -3,10 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 
 const works = [
-  { no: "01", title: "The Weight of Silence", artist: "Mara Okoye", year: "2026", image: "/art/hero-ink-sculpture.png" },
-  { no: "02", title: "Veil, Unfolding", artist: "Sora Vale", year: "2025", image: "/art/exhibition-veil.png" },
-  { no: "03", title: "Memory Is a Material", artist: "Léon Agyem", year: "2026", image: "/art/artist-portrait.png" },
+  { no: "01", title: "The Weight of Silence", artist: "Mara Okoye", year: "2026", image: "/art/hero-ink-sculpture.png", video: "/video/hero-ink-motion.mp4" },
+  { no: "02", title: "Veil, Unfolding", artist: "Sora Vale", year: "2025", image: "/art/exhibition-veil.png", video: "/video/veil-motion.mp4" },
+  { no: "03", title: "Memory Is a Material", artist: "Léon Agyem", year: "2026", image: "/art/artist-portrait.png", video: "/video/portrait-motion.mp4" },
 ];
+
+function MotionArtwork({ src, poster, className = "" }: { src: string; poster: string; className?: string }) {
+  return <><video className={`motion-art ${className}`} autoPlay muted loop playsInline preload="metadata" poster={poster} aria-hidden="true"><source src={src} type="video/mp4" /></video><img className={`motion-fallback ${className}`} src={poster} alt="" aria-hidden="true" /></>;
+}
 
 export default function Home() {
   const [loaded, setLoaded] = useState(false);
@@ -64,6 +68,7 @@ export default function Home() {
   return (
     <main className={loaded ? "site loaded" : "site"}>
       <div className="loader" aria-hidden={loaded}>
+        <MotionArtwork src="/video/hero-ink-motion.mp4" poster="/art/hero-ink-sculpture.png" className="loader-ink-film" />
         <div className="ink-orb"><i /><i /><i /></div>
         <div className="loader-mark"><span>ARC</span><b>/</b><span>FORM</span></div>
         <div className="loader-line"><em /></div>
@@ -88,7 +93,7 @@ export default function Home() {
       </header>
 
       <section className="hero" id="top">
-        <div className="hero-media"><img src="/art/hero-ink-sculpture.png" alt="Black liquid sculpture in a dark gallery" /><div className="media-shade" /></div>
+        <div className="hero-media"><MotionArtwork src="/video/hero-ink-motion.mp4" poster="/art/hero-ink-sculpture.png" /><div className="media-shade" /></div>
         <div className="hero-copy">
           <p className="eyebrow">Contemporary Art · Accra / London</p>
           <h1><span>ART</span><span>BEYOND</span><span>THE <em>FRAME.</em></span></h1>
@@ -110,7 +115,7 @@ export default function Home() {
       <section className="shows" id="exhibitions">
         <div className="shows-head"><div className="section-tag"><span>02</span> / CURRENT EXHIBITIONS</div><h2>IN THE<br /><em>GALLERY</em></h2><p>Three rooms. Three propositions.<br />One continuous field.</p></div>
         <div className="work-stage">
-          <div className="work-image" key={activeWork}><img src={works[activeWork].image} alt={works[activeWork].title} /><div className="lens" /></div>
+          <div className="work-image" key={activeWork}><MotionArtwork src={works[activeWork].video} poster={works[activeWork].image} /><div className="lens" /></div>
           <div className="work-meta"><span>{works[activeWork].no} / 03</span><h3>{works[activeWork].title}</h3><p>{works[activeWork].artist} · {works[activeWork].year}</p><a href="#visit">VIEW EXHIBITION <b>↗</b></a></div>
           <div className="work-controls"><button onClick={() => setActiveWork((activeWork + 2) % 3)} aria-label="Previous artwork">←</button><div>{works.map((_, i) => <button key={i} onClick={() => setActiveWork(i)} className={i === activeWork ? "active" : ""} aria-label={`Artwork ${i + 1}`} />)}</div><button onClick={() => setActiveWork((activeWork + 1) % 3)} aria-label="Next artwork">→</button></div>
         </div>
@@ -118,14 +123,14 @@ export default function Home() {
 
       <section className="moving-quote">
         <div className="marquee"><span>FORM IS NEVER STILL · MATTER REMEMBERS · FORM IS NEVER STILL · MATTER REMEMBERS ·&nbsp;</span><span>FORM IS NEVER STILL · MATTER REMEMBERS · FORM IS NEVER STILL · MATTER REMEMBERS ·&nbsp;</span></div>
-        <div className="film"><img src="/art/exhibition-veil.png" alt="Draped sculptural form" /><button aria-label="Play exhibition film"><i>▶</i><span>PLAY FILM<br /><small>02:46</small></span></button><div className="film-caption"><span>ARC / FORM FILMS Nº 08</span><p>Inside the studio with<br />Sora Vale</p></div></div>
+        <div className="film"><MotionArtwork src="/video/veil-motion.mp4" poster="/art/exhibition-veil.png" /><button aria-label="Play exhibition film"><i>▶</i><span>PLAY FILM<br /><small>02:46</small></span></button><div className="film-caption"><span>ARC / FORM FILMS Nº 08</span><p>Inside the studio with<br />Sora Vale</p></div></div>
       </section>
 
       <section className="artists" id="artists">
         <div className="section-tag"><span>03</span> / REPRESENTED ARTISTS</div>
         <div className="artist-grid">
           <div className="artist-intro"><h2>VOICES<br />IN <em>FORM</em></h2><p>A cross-generational programme of artists interrogating material, place and belonging.</p><a href="#artist-list">VIEW ALL ARTISTS ↗</a></div>
-          <div className="portrait"><img src="/art/artist-portrait.png" alt="Artist silhouette behind smoked glass" /><span>STUDIO VISIT · ACCRA 2026</span></div>
+          <div className="portrait"><MotionArtwork src="/video/portrait-motion.mp4" poster="/art/artist-portrait.png" /><span>STUDIO VISIT · ACCRA 2026</span></div>
           <div className="artist-list" id="artist-list">
             {["Mara Okoye", "Sora Vale", "Léon Agyem", "Inès Marlow", "Kwesi Tano", "Aya Nord"].map((name, i) => <a href="#visit" key={name}><small>0{i + 1}</small><span>{name}</span><b>↗</b></a>)}
           </div>
@@ -136,13 +141,13 @@ export default function Home() {
         <div className="journal-top"><div className="section-tag"><span>04</span> / FIELD NOTES</div><h2>FROM THE<br /><em>ARCHIVE</em></h2></div>
         <div className="notes">
           <article><span>ESSAY · 12 MIN</span><h3>Can a sculpture remember the hands that made it?</h3><p>On touch, trace and the quiet politics of material.</p><a href="#">READ NOTE ↗</a></article>
-          <article className="note-image"><img src="/art/hero-ink-sculpture.png" alt="Dark ink sculpture detail" /><span>CONVERSATION · 18 MIN</span><h3>Mara Okoye on building monuments to the unfinished.</h3><a href="#">READ NOTE ↗</a></article>
+          <article className="note-image"><MotionArtwork src="/video/hero-ink-motion.mp4" poster="/art/hero-ink-sculpture.png" /><span>CONVERSATION · 18 MIN</span><h3>Mara Okoye on building monuments to the unfinished.</h3><a href="#">READ NOTE ↗</a></article>
           <article><span>DISPATCH · ACCRA</span><div className="orbital">A/F</div><h3>After the white cube: a gallery porous to the city.</h3><p>Director Ama Serwah introduces our expanded programme.</p><a href="#">READ NOTE ↗</a></article>
         </div>
       </section>
 
       <section className="visit" id="visit">
-        <div className="visit-backdrop"><img src="/art/exhibition-veil.png" alt="Gallery interior" /></div>
+        <div className="visit-backdrop"><MotionArtwork src="/video/veil-motion.mp4" poster="/art/exhibition-veil.png" /></div>
         <div className="visit-copy"><div className="section-tag"><span>05</span> / VISIT</div><h2>COME<br /><em>CLOSER.</em></h2><p>18 Independence Avenue<br />Osu, Accra, Ghana</p><div className="hours"><span>Tue—Sat</span><b>10:00—18:00</b><span>Sun</span><b>By appointment</b></div><a className="pill" href="mailto:visit@arcform.gallery">PLAN YOUR VISIT <b>↗</b></a></div>
       </section>
 
