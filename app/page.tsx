@@ -10,7 +10,7 @@ const chapters: ChapterData[] = [
     id: "top",
     number: "01",
     index: "FILM 001 / 003",
-    src: `${assetPrefix}/art/hero-cinematic ink sculpture mate (1).mp4`,
+    src: `${assetPrefix}/art/hero-sculpture.mp4`,
     eyebrow: "CONTEMPORARY ART · ACCRA / LONDON",
     title: ["ART", "BEYOND", "THE FRAME."],
     copy: "An independent gallery for radical material, moving image and ideas that refuse containment.",

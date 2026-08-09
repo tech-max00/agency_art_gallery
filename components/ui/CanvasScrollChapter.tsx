@@ -42,178 +42,146 @@ export function CanvasScrollChapter({
   const progressBarRef = useRef<HTMLElement>(null);
 
   const [activeZone, setActiveZone] = useState<"intro" | "one" | "two" | "three" | "outro">("intro");
-  const frameCacheRef = useRef<HTMLImageElement[]>([]);
-  const isPredecodedRef = useRef(false);
-  const tickingRef = useRef(false);
+  const [videoLoaded, setVideoLoaded] = useState(false);
+  const targetProgressRef = useRef(0);
   const currentProgressRef = useRef(0);
+  const lastTimeRef = useRef(0);
+  const rafIdRef = useRef<number | null>(null);
 
-  const FRAME_COUNT = 90; // 90 keyframes per chapter
-
-  // Pre-decode video frames into offscreen canvas image cache
-  const predecodeFrames = useCallback(() => {
+  const handleLoadedMetadata = useCallback(() => {
+    setVideoLoaded(true);
+    onReady?.(chapterIndex);
     const video = videoRef.current;
-    if (!video || isPredecodedRef.current) return;
-    if (video.readyState < 2) return;
+    if (video) {
+      video.pause();
+      // Initialize to frame 0
+      video.currentTime = 0.001;
+    }
+  }, [chapterIndex, onReady]);
 
-    const duration = video.duration || 4;
-    const offCanvas = document.createElement("canvas");
-    offCanvas.width = video.videoWidth || 1280;
-    offCanvas.height = video.videoHeight || 720;
-    const offCtx = offCanvas.getContext("2d");
-    if (!offCtx) return;
+  // Main render & video currentTime seek loop
+  useEffect(() => {
+    let active = true;
 
-    const frames: HTMLImageElement[] = [];
-    let captured = 0;
+    const renderLoop = () => {
+      if (!active) return;
 
-    const captureNext = (idx: number) => {
-      if (idx >= FRAME_COUNT) {
-        frameCacheRef.current = frames;
-        isPredecodedRef.current = true;
-        onReady?.(chapterIndex);
-        return;
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+
+      // Smooth progress lerping for silky smooth motion
+      const target = targetProgressRef.current;
+      currentProgressRef.current += (target - currentProgressRef.current) * 0.18;
+      const progress = currentProgressRef.current;
+
+      if (video && video.readyState >= 1 && video.duration) {
+        const duration = video.duration;
+        const targetTime = Math.min(duration - 0.05, Math.max(0.001, progress * duration));
+
+        // Only update video currentTime if changed meaningfully to avoid thrashing
+        if (Math.abs(video.currentTime - targetTime) > 0.015) {
+          video.currentTime = targetTime;
+          lastTimeRef.current = targetTime;
+        }
+
+        // Draw to canvas for crisp rendering
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            const dpr = window.devicePixelRatio || 1;
+            const cw = window.innerWidth;
+            const ch = window.innerHeight;
+
+            if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
+              canvas.width = cw * dpr;
+              canvas.height = ch * dpr;
+              canvas.style.width = cw + "px";
+              canvas.style.height = ch + "px";
+            }
+
+            ctx.save();
+            ctx.scale(dpr, dpr);
+            ctx.clearRect(0, 0, cw, ch);
+
+            const naturalW = video.videoWidth || 1920;
+            const naturalH = video.videoHeight || 1080;
+            const imgRatio = naturalW / naturalH;
+            const canvasRatio = cw / ch;
+
+            let drawW: number;
+            let drawH: number;
+
+            if (cw > 768) {
+              if (canvasRatio > imgRatio) {
+                drawW = cw;
+                drawH = cw / imgRatio;
+              } else {
+                drawH = ch;
+                drawW = ch * imgRatio;
+              }
+            } else {
+              if (canvasRatio > imgRatio) {
+                drawW = cw * 1.3;
+                drawH = (cw / imgRatio) * 1.3;
+              } else {
+                drawH = ch * 1.3;
+                drawW = ch * imgRatio * 1.3;
+              }
+            }
+
+            const drawX = (cw - drawW) / 2;
+            const drawY = (ch - drawH) / 2;
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            try {
+              ctx.drawImage(video, drawX, drawY, drawW, drawH);
+            } catch {
+              // Ignore canvas draw error during video load
+            }
+            ctx.restore();
+          }
+        }
       }
 
-      const targetTime = (idx / (FRAME_COUNT - 1)) * duration;
-      video.currentTime = targetTime;
+      // Direct DOM updates
+      if (introRef.current) {
+        const opacity = Math.max(0, 1 - progress / 0.12);
+        introRef.current.style.opacity = String(opacity);
+        introRef.current.style.transform = `translateY(${-progress * 60}px)`;
+      }
 
-      const handleSeeked = () => {
-        video.removeEventListener("seeked", handleSeeked);
-        offCtx.drawImage(video, 0, 0, offCanvas.width, offCanvas.height);
-        const img = new Image();
-        img.src = offCanvas.toDataURL("image/jpeg", 0.82);
-        img.onload = () => {
-          captured++;
-          if (captured === FRAME_COUNT) {
-            frameCacheRef.current = frames;
-            isPredecodedRef.current = true;
-            onReady?.(chapterIndex);
-          }
-        };
-        frames[idx] = img;
-        captureNext(idx + 1);
-      };
+      if (progressTextRef.current) {
+        progressTextRef.current.textContent = `${String(Math.round(progress * 100)).padStart(2, "0")}%`;
+      }
 
-      video.addEventListener("seeked", handleSeeked, { once: true });
+      if (progressBarRef.current) {
+        progressBarRef.current.style.transform = `scaleX(${progress})`;
+      }
+
+      rafIdRef.current = requestAnimationFrame(renderLoop);
     };
 
-    captureNext(0);
-  }, [chapterIndex, onReady]);
+    rafIdRef.current = requestAnimationFrame(renderLoop);
 
-  // Fallback mark ready if video loaded metadata
-  const handleVideoLoaded = useCallback(() => {
-    if (onReady && !isPredecodedRef.current) {
-      onReady(chapterIndex);
-    }
-  }, [chapterIndex, onReady]);
-
-  // Canvas draw function with DPI scaling & cover-fit + mobile zoom
-  const drawFrame = useCallback((progress: number) => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const dpr = window.devicePixelRatio || 1;
-    const cw = window.innerWidth;
-    const ch = window.innerHeight;
-
-    if (canvas.width !== cw * dpr || canvas.height !== ch * dpr) {
-      canvas.width = cw * dpr;
-      canvas.height = ch * dpr;
-      canvas.style.width = cw + "px";
-      canvas.style.height = ch + "px";
-    }
-
-    ctx.save();
-    ctx.scale(dpr, dpr);
-    ctx.clearRect(0, 0, cw, ch);
-
-    let source: HTMLImageElement | HTMLVideoElement | null = null;
-    const cached = frameCacheRef.current;
-    if (cached.length === FRAME_COUNT && isPredecodedRef.current) {
-      const idx = Math.min(FRAME_COUNT - 1, Math.floor(progress * FRAME_COUNT));
-      source = cached[idx] || null;
-    }
-
-    if (!source && video && video.readyState >= 2) {
-      const duration = video.duration || 4;
-      const targetTime = progress * duration;
-      if (Math.abs(video.currentTime - targetTime) > 0.08) {
-        video.currentTime = targetTime;
-      }
-      source = video;
-    }
-
-    if (source) {
-      const naturalW = (source as HTMLImageElement).naturalWidth || (source as HTMLVideoElement).videoWidth || 1920;
-      const naturalH = (source as HTMLImageElement).naturalHeight || (source as HTMLVideoElement).videoHeight || 1080;
-      const imgRatio = naturalW / naturalH;
-      const canvasRatio = cw / ch;
-
-      let drawW: number;
-      let drawH: number;
-
-      if (cw > 768) {
-        if (canvasRatio > imgRatio) {
-          drawW = cw;
-          drawH = cw / imgRatio;
-        } else {
-          drawH = ch;
-          drawW = ch * imgRatio;
-        }
-      } else {
-        // Mobile cover fit + 1.3x zoom
-        if (canvasRatio > imgRatio) {
-          drawW = cw * 1.3;
-          drawH = (cw / imgRatio) * 1.3;
-        } else {
-          drawH = ch * 1.3;
-          drawW = ch * imgRatio * 1.3;
-        }
-      }
-
-      const drawX = (cw - drawW) / 2;
-      const drawY = (ch - drawH) / 2;
-
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(source, drawX, drawY, drawW, drawH);
-    }
-
-    ctx.restore();
+    return () => {
+      active = false;
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+    };
   }, []);
 
-  // Update on scroll RAF loop
-  const updateScroll = useCallback(() => {
+  // Update on scroll
+  const handleScroll = useCallback(() => {
     const section = sectionRef.current;
     if (!section) return;
 
     const rect = section.getBoundingClientRect();
     const travel = Math.max(1, section.offsetHeight - window.innerHeight);
     const progress = Math.min(1, Math.max(0, -rect.top / travel));
-    currentProgressRef.current = progress;
 
-    drawFrame(progress);
+    targetProgressRef.current = progress;
     onProgress?.(chapterIndex, progress);
 
-    // Direct DOM updates for high-frequency elements
-    if (introRef.current) {
-      const opacity = Math.max(0, 1 - progress / 0.12);
-      introRef.current.style.opacity = String(opacity);
-      introRef.current.style.transform = `translateY(${-progress * 60}px)`;
-    }
-
-    if (progressTextRef.current) {
-      progressTextRef.current.textContent = `${String(Math.round(progress * 100)).padStart(2, "0")}%`;
-    }
-
-    if (progressBarRef.current) {
-      progressBarRef.current.style.transform = `scaleX(${progress})`;
-    }
-
-    // Determine discrete note card zones
     let nextZone: "intro" | "one" | "two" | "three" | "outro" = "intro";
     if (progress < 0.14) {
       nextZone = "intro";
@@ -228,27 +196,18 @@ export function CanvasScrollChapter({
     }
 
     setActiveZone((prev) => (prev === nextZone ? prev : nextZone));
-  }, [chapterIndex, drawFrame, onProgress]);
-
-  const scheduleUpdate = useCallback(() => {
-    if (tickingRef.current) return;
-    tickingRef.current = true;
-    requestAnimationFrame(() => {
-      updateScroll();
-      tickingRef.current = false;
-    });
-  }, [updateScroll]);
+  }, [chapterIndex, onProgress]);
 
   useEffect(() => {
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate, { passive: true });
-    scheduleUpdate();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+    handleScroll();
 
     return () => {
-      window.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
     };
-  }, [scheduleUpdate]);
+  }, [handleScroll]);
 
   return (
     <section
@@ -257,33 +216,37 @@ export function CanvasScrollChapter({
       id={chapter.id}
       data-zone={activeZone}
     >
-      {/* Hidden video element used for frame extraction/rendering */}
-      <video
-        ref={videoRef}
-        src={chapter.src}
-        preload="auto"
-        muted
-        playsInline
-        className="hidden"
-        onLoadedMetadata={handleVideoLoaded}
-        onCanPlay={handleVideoLoaded}
-      />
-
       <div
         className="chapter-sticky sticky top-0 h-[100dvh] w-full overflow-hidden bg-[#080808]"
         style={{ willChange: "transform", transform: "translateZ(0)" }}
       >
-        {/* Canvas Display */}
+        {/* Hardware-accelerated Video Element scrubbed via currentTime */}
+        <video
+          ref={videoRef}
+          src={chapter.src}
+          preload="auto"
+          muted
+          playsInline
+          disablePictureInPicture
+          controlsList="nodownload noplaybackrate"
+          aria-label={`${chapter.title.join(" ")} artwork video`}
+          onLoadedMetadata={handleLoadedMetadata}
+          onCanPlay={handleLoadedMetadata}
+          className="absolute inset-0 h-full w-full object-cover filter saturate-[.85] contrast-[1.06] brightness-[.75]"
+          style={{ willChange: "contents, transform", transform: "translateZ(0)" }}
+        />
+
+        {/* Canvas Overlay */}
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="absolute inset-0 h-full w-full object-cover opacity-90 mix-blend-screen"
           style={{ willChange: "contents", transform: "translateZ(0)" }}
         />
 
-        {/* Radial Vignette & Gradient Overlays */}
+        {/* Vignette & Gradients */}
         <div className="chapter-vignette pointer-events-none absolute inset-0 z-10" />
 
-        {/* Stark / ARC / FORM HUD Corner Brackets */}
+        {/* HUD Corner Brackets */}
         <div className="hud-corner hud-top-left pointer-events-none absolute left-6 top-24 z-20 text-[#a33b3f] md:left-10 md:top-28">
           <svg width="24" height="24" viewBox="0 0 26 26" fill="none">
             <path d="M 2 26 L 2 2 L 26 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
@@ -314,7 +277,7 @@ export function CanvasScrollChapter({
           <span>{chapter.index}</span>
         </div>
 
-        {/* Chapter Main Intro Text */}
+        {/* Intro Text */}
         <div
           ref={introRef}
           className="chapter-intro pointer-events-none absolute left-[4vw] top-[20%] z-20 w-[min(760px,70vw)] transition-opacity duration-150 ease-out"
@@ -335,7 +298,7 @@ export function CanvasScrollChapter({
           </p>
         </div>
 
-        {/* Annotation & Field Note Cards with Zone Visibility */}
+        {/* Field Note Cards */}
         <div className="chapter-notes pointer-events-none absolute inset-0 z-20">
           {chapter.notes.map(({ label, title, detail }, noteIdx) => {
             const isVisible =
