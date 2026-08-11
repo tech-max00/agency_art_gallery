@@ -204,9 +204,10 @@ function ScrollFrames({ id, className, directory, frameCount, label, fit = "cove
       }
       updateTarget();
       const difference = targetFrame - displayedFrame;
-      displayedFrame = Math.abs(difference) < 0.08
-        ? targetFrame
-        : displayedFrame + Math.max(-4, Math.min(4, difference * 0.22));
+      // Scroll position is authoritative: request its exact frame immediately.
+      // Interpolating through skipped frames makes fast scrolls wait on obsolete
+      // network requests, which is especially visible on a cold GitHub Pages load.
+      displayedFrame = targetFrame;
       const nextFrame = Math.round(displayedFrame);
       requestFrame(nextFrame);
       const direction = difference >= 0 ? 1 : -1;
