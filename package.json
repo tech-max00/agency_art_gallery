@@ -18,8 +18,6 @@
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
-    "framer-motion": "^13.0.0",
-    "lenis": "1.3.21",
     "next": "16.2.6",
     "react": "19.2.6",
     "react-dom": "19.2.6"
@@ -43,5 +41,5 @@
     "wrangler": "4.92.0"
   },
   "type": "module",
-  "displayName": "ARC / FORM — Contemporary Art Gallery"
+  "displayName": "ARC / FORM \u2014 Contemporary Art Gallery"
 }
